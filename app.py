@@ -553,6 +553,9 @@ with st.sidebar:
     sidebar_link("Note Maker", "Note Maker", "edit_note")
     sidebar_link("Quiz Center", "Quiz Center", "quiz")
     sidebar_link("Merycle Chatbot", "Merycle Chatbot", "chat")
+    st.markdown("<div style='height:14px'></div><div style='font-size:.68rem;font-weight:700;letter-spacing:1.1px;color:#879188;padding:0 10px 7px'>TOOLS</div>", unsafe_allow_html=True)
+    sidebar_link("Calculator", "Calculator", "calculate")
+    sidebar_link("Translator", "Translator", "translate")
     sidebar_link("Learning Games", "Learning Games", "sports_esports")
     st.markdown("<div style='height:14px'></div><div style='font-size:.68rem;font-weight:700;letter-spacing:1.1px;color:#879188;padding:0 10px 7px'>YOUR ACTIVITY</div>", unsafe_allow_html=True)
     sidebar_link("Progress", "Progress Detector", "monitoring")
@@ -1760,6 +1763,320 @@ elif page == "My Profile":
 
 
 # ---------------------------- PAGE: MERYCLE CHATBOT ----------------------------
+
+
+
+elif page == "Calculator":
+    import ast
+    import math
+    import re
+
+    st.markdown("""
+    <style>
+    .calc-display {
+        background: var(--secondary-background-color);
+        border: 1px solid rgba(128,128,128,.25);
+        border-radius: 18px;
+        padding: 20px 22px;
+        min-height: 88px;
+        text-align: right;
+        margin-bottom: 12px;
+    }
+    .calc-expression {
+        color: var(--text-color);
+        font-size: 30px;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+    div.stButton > button {
+        border-radius: 16px;
+        min-height: 48px;
+        font-size: 16px;
+        font-weight: 500;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.title("Scientific Calculator")
+    st.caption("Everyday and scientific calculations in one place.")
+
+    if "calc_expression" not in st.session_state:
+        st.session_state.calc_expression = ""
+
+    if "calc_answer" not in st.session_state:
+        st.session_state.calc_answer = 0
+
+    if "calc_history" not in st.session_state:
+        st.session_state.calc_history = []
+
+    if "calc_degrees" not in st.session_state:
+        st.session_state.calc_degrees = True
+
+    def calc_press(value):
+        current = st.session_state.calc_expression
+
+        if value == "AC":
+            st.session_state.calc_expression = ""
+        elif value == "DEL":
+            st.session_state.calc_expression = current[:-1]
+        elif value == "Ans":
+            st.session_state.calc_expression += str(st.session_state.calc_answer)
+        elif value == "π":
+            st.session_state.calc_expression += "pi"
+        elif value == "e":
+            st.session_state.calc_expression += "e"
+        elif value == "√":
+            st.session_state.calc_expression += "sqrt("
+        elif value in ("sin", "cos", "tan", "ln", "log", "abs"):
+            st.session_state.calc_expression += value + "("
+        elif value == "x!":
+            st.session_state.calc_expression += "!"
+        elif value == "xʸ":
+            st.session_state.calc_expression += "^"
+        elif value == "EXP":
+            st.session_state.calc_expression += "*10^"
+        elif value == "Deg/Rad":
+            st.session_state.calc_degrees = not st.session_state.calc_degrees
+        elif value == "=":
+            calculate_expression()
+        else:
+            st.session_state.calc_expression += value
+
+    def calculate_expression():
+        expression = st.session_state.calc_expression.strip()
+
+        if not expression:
+            return
+
+        if len(expression) > 200:
+            st.error("Expression is too long.")
+            return
+
+        expression = expression.replace("×", "*").replace("÷", "/")
+        expression = expression.replace("^", "**")
+        expression = re.sub(r"(?<=\d)\s*%", "/100", expression)
+        expression = re.sub(r"(\d+(?:\.\d+)?)!", r"factorial(\1)", expression)
+
+        if st.session_state.calc_degrees:
+            expression = re.sub(
+                r"\b(sin|cos|tan)\(([^()]*)\)",
+                lambda m: f"{m.group(1)}(radians({m.group(2)}))",
+                expression
+            )
+
+        allowed_functions = {
+            "sqrt": math.sqrt,
+            "sin": math.sin,
+            "cos": math.cos,
+            "tan": math.tan,
+            "ln": math.log,
+            "log": math.log10,
+            "abs": abs,
+            "factorial": math.factorial,
+            "radians": math.radians,
+        }
+
+        allowed_names = {
+            "pi": math.pi,
+            "e": math.e,
+            "Ans": st.session_state.calc_answer,
+        }
+
+        try:
+            tree = ast.parse(expression, mode="eval")
+
+            def evaluate(node, depth=0):
+                if depth > 30:
+                    raise ValueError("Expression is too complex.")
+
+                if isinstance(node, ast.Expression):
+                    return evaluate(node.body, depth + 1)
+
+                if isinstance(node, ast.Constant):
+                    if type(node.value) not in (int, float):
+                        raise ValueError("Invalid number.")
+                    return node.value
+
+                if isinstance(node, ast.Name):
+                    if node.id not in allowed_names:
+                        raise ValueError("Unknown symbol.")
+                    return allowed_names[node.id]
+
+                if isinstance(node, ast.UnaryOp):
+                    value = evaluate(node.operand, depth + 1)
+                    if isinstance(node.op, ast.UAdd):
+                        return value
+                    if isinstance(node.op, ast.USub):
+                        return -value
+                    raise ValueError("Unsupported operation.")
+
+                if isinstance(node, ast.BinOp):
+                    left = evaluate(node.left, depth + 1)
+                    right = evaluate(node.right, depth + 1)
+
+                    if isinstance(node.op, ast.Add):
+                        return left + right
+                    if isinstance(node.op, ast.Sub):
+                        return left - right
+                    if isinstance(node.op, ast.Mult):
+                        return left * right
+                    if isinstance(node.op, ast.Div):
+                        return left / right
+                    if isinstance(node.op, ast.Mod):
+                        return left % right
+                    if isinstance(node.op, ast.Pow):
+                        if abs(right) > 12 or abs(left) > 1e12:
+                            raise ValueError("Power is outside the allowed range.")
+                        return left ** right
+
+                    raise ValueError("Unsupported operation.")
+
+                if isinstance(node, ast.Call):
+                    if not isinstance(node.func, ast.Name):
+                        raise ValueError("Unsupported function.")
+                    function = allowed_functions.get(node.func.id)
+                    if function is None or node.keywords or len(node.args) != 1:
+                        raise ValueError("Unsupported function or arguments.")
+                    return function(evaluate(node.args[0], depth + 1))
+
+                raise ValueError("Invalid expression.")
+
+            result = evaluate(tree)
+
+            if type(result) not in (int, float) or not math.isfinite(result):
+                raise ValueError("Result is outside the supported range.")
+
+            if abs(result) > 1e100:
+                raise ValueError("Result is too large.")
+
+            st.session_state.calc_answer = result
+            formatted = f"{result:,.12g}"
+            st.session_state.calc_history.insert(
+                0, (st.session_state.calc_expression, formatted)
+            )
+            st.session_state.calc_history = st.session_state.calc_history[:10]
+            st.session_state.calc_expression = formatted
+
+        except ZeroDivisionError:
+            st.error("Cannot divide by zero.")
+        except (ValueError, SyntaxError, OverflowError):
+            st.error("Invalid expression. Please check your calculation.")
+
+    st.markdown(
+        f'<div class="calc-display"><div class="calc-expression">'
+        f'{st.session_state.calc_expression or "0"}</div></div>',
+        unsafe_allow_html=True
+    )
+
+    rows = [
+        ["Deg/Rad", "x!", "(", ")", "%", "DEL", "AC"],
+        ["Inv", "sin", "ln", "7", "8", "9", "÷"],
+        ["π", "cos", "log", "4", "5", "6", "×"],
+        ["e", "tan", "√", "1", "2", "3", "−"],
+        ["Ans", "EXP", "xʸ", "0", ".", "=", "+"],
+    ]
+
+    for row_index, row in enumerate(rows):
+        columns = st.columns(7, gap="small")
+        for column_index, label in enumerate(row):
+            with columns[column_index]:
+                if label == "Deg/Rad":
+                    shown_label = "Deg" if st.session_state.calc_degrees else "Rad"
+                elif label == "−":
+                    shown_label = "−"
+                else:
+                    shown_label = label
+
+                st.button(
+                    shown_label,
+                    key=f"calc_key_{row_index}_{column_index}",
+                    use_container_width=True,
+                    type="primary" if label == "=" else "secondary",
+                    on_click=calc_press,
+                    args=(label,)
+                )
+
+    if st.session_state.calc_history:
+        with st.expander("Calculation history"):
+            for old_expression, old_answer in st.session_state.calc_history:
+                st.write(f"{old_expression} = **{old_answer}**")
+
+    st.caption("Scientific functions · DEG/RAD · Powers · Percentages · History")
+
+elif page == "Translator":
+    st.title("Translator")
+    st.caption("Translate text between languages with Merycle's AI engine.")
+
+    languages = [
+        "Auto-detect", "English", "Hindi", "Punjabi", "Urdu",
+        "Spanish", "French", "German", "Arabic", "Chinese",
+        "Japanese", "Korean", "Portuguese", "Russian",
+        "Bengali", "Gujarati", "Marathi", "Tamil", "Telugu"
+    ]
+
+    source_language = st.selectbox(
+        "Translate from",
+        languages,
+        index=0,
+        key="life_translator_source"
+    )
+
+    target_language = st.selectbox(
+        "Translate into",
+        [language for language in languages if language != "Auto-detect"],
+        index=0,
+        key="life_translator_target"
+    )
+
+    translation_text = st.text_area(
+        "Enter text to translate",
+        height=180,
+        max_chars=5000,
+        placeholder="Type or paste your text here...",
+        key="life_translator_input"
+    )
+
+    if st.button("Translate", type="primary"):
+        if not translation_text.strip():
+            st.warning("Please enter some text first.")
+        else:
+            language_instruction = (
+                "Detect the source language automatically"
+                if source_language == "Auto-detect"
+                else f"The source language is {source_language}"
+            )
+
+            prompt = f"""
+Translate the following text accurately into {target_language}.
+{language_instruction}.
+
+Preserve the original meaning, tone, names, numbers, and formatting.
+Return only the translated text. Do not add explanations.
+
+TEXT:
+{translation_text}
+"""
+
+            try:
+                with st.spinner("Merycle is translating..."):
+                    translated = gemini_generate(prompt, temperature=0.1)
+
+                st.session_state["life_translator_result"] = translated
+                st.success("Translation complete.")
+
+            except Exception as error:
+                st.error(f"Translation failed: {error}")
+
+    translated_result = st.session_state.get("life_translator_result", "")
+
+    if translated_result:
+        st.markdown("### Translation")
+        st.text_area(
+            "Translated text",
+            value=translated_result,
+            height=180,
+            key="life_translator_output"
+        )
 
 elif page == "Merycle Chatbot":
 

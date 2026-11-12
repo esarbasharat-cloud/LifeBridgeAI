@@ -14,3 +14,5 @@ venv/
 deployment_dependencies_review.txt
 app_before_logo.py
 lifebridgeai_logo_transparent.png
+
+app_before_calculator_translator.py
